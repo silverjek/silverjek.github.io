@@ -10,16 +10,16 @@ math: true
 
 이 글은 이화여자대학교 졸업 프로젝트 연구 트랙 진행 상황 아카이빙을 위한 기록입니다.
 
-현재 저희 팀은 **multimodal 데이터를 활용한 action recognition**을 도메인으로 연구를 진행 중 입니다. 특히 **특정 모달리티가 누락**되었을 경우 **행동 인식의 성능이 저하** 될 수 있음을 주요 문제 상황으로 정의하고 **누락된 데이터를 생성**, **모델의 성능을 개선**하는 방법을 탐구 중에 있습니다.
+현재 저희 팀은 **multimodal 데이터를 활용한 action recognition**을 도메인으로 연구를 진행 중 입니다. 특히 특정 모달리티가 누락되었을 경우 행동 인식의 성능이 저하될 수 있음을 주요 문제 상황으로 정의하고 **누락된 데이터를 생성**, **모델의 성능을 개선**하는 방법을 탐구 중에 있습니다.
 
-현재 연구의 시작 단계로 기반이 되는 선행 논문, Audio Feature Generation for Missing Modality Problem in Video Action Recognition (Lee et al., 2019)[^footnote]의 실험을 재현 중에 있습니다. 재현을 통해 데이터 처리와 모델에 대해 이해하고 저희 연구의 novelty를 위한 기술을 적용하기 위한 기반을 마련했습니다.
+현재 연구의 시작 단계로 기반이 되는 선행 논문, **Audio Feature Generation for Missing Modality Problem in Video Action Recognition** (Lee et al., 2019)[^footnote]의 실험을 재현 중에 있습니다. 재현을 통해 데이터 처리와 모델에 대해 이해하고 저희 연구의 novelty를 위한 기술을 적용하기 위한 기반을 마련했습니다.
 
 선행 논문에서  [**Moments in Time**](http://moments.csail.mit.edu/) 데이터 셋을 사용했습니다. 해당 데이터 셋은 행동 인식을 위해 3초의 짧은 비디오를 304개의 action class로 라벨링 했으며 people&animal action, objects, 그리고 natural phenomena를 다양하게 포함하고 있습니다.
 데이터 셋 용량 및 초기 실험의 편의/속도를 위해 10개의 클래스에서 각 1,000개의 영상을 랜덤으로 추출해 총 10,000개의 데이터로 실험을 진행했습니다.
 
 본 포스팅에서는 OpenCV를 사용한 비디오 데이터 전처리, PyTorch를 사용한 특징 추출, 그리고 논문에서 제안한 LSTM-based sound feature generator의 first branch인 **classification branch**를 구현하는 방법을 다루겠습니다.
 
-# Data Processing (데이터 전처리) <br> & Feature Extraction (특징 추출)
+# Data Processing & Feature Extraction
 
 먼저, raw data인 비디오를 처리하고 feature를 추출하는 플로우에 대한 이해가 필요합니다. 현재 재현 중인 논문의 2.1. LSTM-based sound feature generator 에서는 **feature extractor**를 다음과 같은 구조로 제안합니다.
 
@@ -158,12 +158,13 @@ if __name__ == "__main__":
     print("All videos processed.")
 ```
 
-해당 코드는 OpenCV를 사용해 6fps(초당 6프레임)으로 비디오를 RGB images로 저장하고 그로부터 프레임 간 Optical Flow images를 저장하는 과정입니다.
-논문에 Optical Flow 처리 방식에 대해 명확히 언급되어 있지 않아 Farneback 방식으로 처리했습니다. 또한 처리 속도 개선을 위해 multiprocessing을 사용했습니다.
+해당 코드는 **OpenCV**를 사용해 **6fps**(초당 6 프레임)으로 비디오를 RGB images로 저장하고 그로부터 프레임 간 Optical Flow images를 추출, 저장하는 과정입니다.
+논문에 Optical Flow 처리 방식에 대해서 언급하고 있지 않아 가장 일반적인 Farneback 방식을 사용했습니다. 또한 처리 속도 개선을 위해 multiprocessing을 사용했습니다.
 
 ## Feature Extraction
 
 이제 각 영상마다 $I_R$과 $I_F$가 준비 되었으니 CNN을 사용해 피쳐 벡터로 변환해야 합니다. Backbone으로는 **PyTorch**의 **ResNet50**을 사용했으며, 해당 모델은 각 이미지에 대한 feature를 [1, 2048]로 반환합니다.
+
 즉, 각 영상의 프레임 이미지가 t개 존재한다면 해당 영상의 feature vector는 [t, 2048] 형태입니다.
 
 ```python
@@ -263,22 +264,24 @@ if __name__ == "__main__":
 ```
 
 해당 코드는 모든 raw video에 대해 - 각 video에서 추출된 프레임의 개수가 t라고 할 때에 - $I_R$ 은 [t, 2048] 형태의 $v_R$, $I_F$은 [t-1, 2048] 형태의 $v_F$로 반환합니다.
-또한 모델에의 활용을 위해 spatial feature $v_R$과 temporal feature $v_F$를 **concatenate** 해 모든 영상에 대한 $v_C$를 .npy 파일로 저장했고, 이로써 LSTM 모델에의 피쳐 사용을 위한 기초 준비를 마쳤습니다.
-그리고, spatial feature와 temporal feature를 concat 시 데이터 형태는 **[t-1, 4096]**입니다 
+또한 모델에의 활용을 위해 spatial feature $v_R$과 temporal feature $v_F$를 **concatenate** 해 모든 영상에 대한 $v_C$를 .npy 파일로 저장했고, 이로써 LSTM 모델에의 피쳐 사용을 위한 기초 준비를 마쳤습니다. 이 때, $v_C$의 데이터 형태는 **[t-1, 4096]**입니다 
 
 RGB images는 t장이지만 두 프레임 사이의 상대적 움직임을 계산한 Optical Flow images는 t-1장이기 때문입니다. RGB images의 첫 장을 드롭해 이미지 개수를 t-1개로 맞췄습니다.
 
 모든 영상에 대해 $v_C$가 준비되었다면 LSTM 모델이 학습 시에 기대하는 데이터 형태와 일치하는지 확인이 필요합니다.
-이전 단계에서 준비된 피처 벡터의 형태는 [t-1, 4096]이며, 이는 각 영상의 시퀀스 길이(t−1)와 feature 차원(4096)을 포함한 **2차원 텐서**입니다.
+Concatenation으로 준비된 피처 벡터의 형태는 **[t-1, 4096]**이며, 이는 각 영상의 시퀀스 길이(t−1)와 concatenate된 feature 차원(4096)을 포함한 **2차원 텐서**입니다.
 
 그러나 LSTM은 **3차원 텐서**를 input으로 학습하는 모델로, LSTM이 기대하는 입력 형태는 다음과 같습니다: **[batch, sequence length, feature dimension]**
 
-batch: 한 번에 모델에 공급되는 시퀀스(비디오)의 개수
-sequence length: 각 비디오의 프레임 시퀀스 길이 (t−1)
-feature dimension: 각 프레임 또는 시퀀스의 feature 크기 (4096)
+**batch**: 한 번에 모델에 공급되는 시퀀스(비디오)의 개수
 
-따라서, 모든 $v_C$ 데이터를 LSTM 모델에 공급하기 위해서는, 각 비디오의 피처 벡터를 3차원 텐서로 변환해야 합니다. 
-이를 위해 $v_C$를 batch 단위로 묶어 [batch, t-1, 4096] 형태로 변환해야 하며, 본 포스팅에서는 실험 중인 환경의 GPU 메모리가 12GB임에 따라 Batch Size를 64로 설정했습니다.
+**sequence length**: 각 비디오의 프레임 시퀀스 길이 (t−1)
+
+**feature dimension**: 각 프레임 또는 시퀀스의 feature 크기 (4096)
+
+따라서, 모든 $v_C$ 데이터를 LSTM 모델에 공급하기 위해서는, 각 비디오의 피처 벡터를 **3차원 텐서로 변환**해야 합니다. 
+
+이를 위해 $v_C$를 **batch 단위**로 묶어 **[batch, t-1, 4096]** 형태로 변환해야 하며, 본 포스팅에서는 실험 중인 환경의 GPU 메모리가 12GB임에 따라 Batch Size를 64로 설정했습니다.
 
 <!-- markdownlint-capture -->
 <!-- markdownlint-disable -->
