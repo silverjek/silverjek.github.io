@@ -158,12 +158,12 @@ if __name__ == "__main__":
     print("All videos processed.")
 ```
 
-해당 코드는 OpenCV의 ~~~를 사용해 6fps(초당 6프레임)으로 비디오를 RGB images로 저장하고 그로부터 프레임 간 Optical Flow images를 저장하는 과정입니다.
+해당 코드는 OpenCV를 사용해 6fps(초당 6프레임)으로 비디오를 RGB images로 저장하고 그로부터 프레임 간 Optical Flow images를 저장하는 과정입니다.
 논문에 Optical Flow 처리 방식에 대해 명확히 언급되어 있지 않아 Farneback 방식으로 처리했습니다. 또한 처리 속도 개선을 위해 multiprocessing을 사용했습니다.
 
 ## Feature Extraction
 
-이제 각 영상마다 $I_R$과 $I_F$가 준비 되었으니 CNN을 사용해 피쳐 벡터로 변환해야 합니다. Backbone은 PyTorch의 ResNet50을 사용했으며, 해당 모델은 각 이미지에 대한 feature를 [1, 2048]로 반환합니다.
+이제 각 영상마다 $I_R$과 $I_F$가 준비 되었으니 CNN을 사용해 피쳐 벡터로 변환해야 합니다. Backbone으로는 **PyTorch**의 **ResNet50**을 사용했으며, 해당 모델은 각 이미지에 대한 feature를 [1, 2048]로 반환합니다.
 즉, 각 영상의 프레임 이미지가 t개 존재한다면 해당 영상의 feature vector는 [t, 2048] 형태입니다.
 
 ```python
@@ -264,7 +264,9 @@ if __name__ == "__main__":
 
 해당 코드는 모든 raw video에 대해 - 각 video에서 추출된 프레임의 개수가 t라고 할 때에 - $I_R$ 은 [t, 2048] 형태의 $v_R$, $I_F$은 [t-1, 2048] 형태의 $v_F$로 반환합니다.
 또한 모델에의 활용을 위해 spatial feature $v_R$과 temporal feature $v_F$를 **concatenate** 해 모든 영상에 대한 $v_C$를 .npy 파일로 저장했고, 이로써 LSTM 모델에의 피쳐 사용을 위한 기초 준비를 마쳤습니다.
-그리고, spatial feature와 temporal feature를 concat 시 데이터 형태는 **[t-1, 4096]**입니다 - RGB images는 t장이지만 두 프레임 사이의 상대적 움직임을 계산한 Optical Flow images는 t-1장이기 때문입니다. RGB images의 첫 장을 드롭해 이미지 개수를 t-1개로 맞췄습니다.
+그리고, spatial feature와 temporal feature를 concat 시 데이터 형태는 **[t-1, 4096]**입니다 
+
+RGB images는 t장이지만 두 프레임 사이의 상대적 움직임을 계산한 Optical Flow images는 t-1장이기 때문입니다. RGB images의 첫 장을 드롭해 이미지 개수를 t-1개로 맞췄습니다.
 
 모든 영상에 대해 $v_C$가 준비되었다면 LSTM 모델이 학습 시에 기대하는 데이터 형태와 일치하는지 확인이 필요합니다.
 이전 단계에서 준비된 피처 벡터의 형태는 [t-1, 4096]이며, 이는 각 영상의 시퀀스 길이(t−1)와 feature 차원(4096)을 포함한 **2차원 텐서**입니다.
@@ -339,11 +341,11 @@ if __name__ == "__main__":
     print("Output probabilities shape:", probabilities.shape)  # Expected shape: [batch, num_classes]
 ```
 
+여기까지 잘 따라오셨다면 classification 성능을 accuracy, F-1 Score 등을 사용해 검증해보시면 됩니다.
+
 이번 포스팅에서는 **LSTM-based sound feature generator**의 첫 번째 branch인 **classification branch**를 구현하고, 이를 위한 데이터 전처리와 특징 추출 과정을 다루었습니다.
 
-먼저, 비디오 데이터를 RGB Frames와 Optical Flow Images로 분리한 뒤, CNN(ResNet50)을 사용하여 각각의 spatial feature와 temporal feature를 추출하고 이를 결합하여 LSTM 입력 데이터를 준비했습니다. 이후, LSTM의 마지막 hidden state를 활용한 classification branch를 구현해 각 비디오의 행동 클래스 확률 분포를 출력하는 과정을 다뤘습니다.
+이 포스팅의 내용은 초기 실험의 기반을 다지는 중요한 단계였습니다. 다음 포스팅에서는 second branch인 **sound feature reconstruction branch**를 구현해  **LSTM-based sound feature generator**를 완성하는 과정을 다루겠습니다. 앞으로도 본 연구 과정을 지속적으로 공유하며, 연구의 완성도를 높이고 더 나은 결과를 도출할 수 있도록 노력하겠습니다. 추가 질문이나 피드백은 언제든 환영합니다! :)
 
-이번 포스팅에서 다룬 구현 내용은 초기 실험의 기반을 다지는 중요한 단계였습니다. 앞으로도 본 연구 과정을 지속적으로 공유하며, 연구의 완성도를 높이고 더 나은 결과를 도출할 수 있도록 노력하겠습니다. 추가 질문이나 피드백은 언제든 환영합니다 :)
-
-# Footnote
+### Footnote
 [^footnote]: Lee, H.-C., Lin, C.-Y., Hsu, P.-C., & Hsu, W. H. (2019). Audio feature generation for missing modality problem in video action recognition. ICASSP 2019 - IEEE International Conference on Acoustics, Speech and Signal Processing, 3956–3960. https://ieeexplore.ieee.org/document/8682513?utm_source=chatgpt.com
