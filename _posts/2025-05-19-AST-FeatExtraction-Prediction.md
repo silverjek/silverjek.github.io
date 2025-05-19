@@ -31,8 +31,6 @@ math: true
 ## **Architecture**
 AST는 오디오를 spectrogram으로 변환하고, 이를 이미지처럼 취급해 처리하는 모델입니다. 핵심 구조는 다음과 같습니다.
 
-![AST](/_posts/20250519/AST.png){: width="972" height="589" .w-75 .normal}
-
 1.	**Log-Mel Spectrogram** 생성
 	•	입력 waveform을 128-dimensional log-Mel spectrogram으로 변환
 	•	오디오 길이에 따라 [T, 128] 형태의 2D 시계열 이미지가 생성됨
