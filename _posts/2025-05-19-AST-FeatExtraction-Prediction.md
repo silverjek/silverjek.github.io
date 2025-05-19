@@ -101,7 +101,7 @@ from transformers import ASTFeatureExtractor, ASTModel
 
 ## **오디오 피처 추출 및 라벨 예측 코드**
 
-1. 먼저, **오디오 파일**(.wav)을 **mono 채널**로 불러와 **16kHz**로 **샘플링**합니다.
+- 먼저, **오디오 파일**(.wav)을 **mono 채널**로 불러와 **16kHz**로 **샘플링**합니다.
 
 ```python
 import soundfile as sf
@@ -109,8 +109,7 @@ waveform, sr = sf.read(path, dtype='float32', always_2d=True)
 waveform = torch.from_numpy(waveform[:, 0])  # mono 채널 사용
 ```
 
-2. 다음으로 Hugging Face의 **ASTFeatureExtractor**를 사용해 오디오를  
-   **log-Mel Spectrogram**으로 변환하고, **normalization**과 **padding**을 자동 처리합니다.
+- 다음으로 Hugging Face의 **ASTFeatureExtractor**를 사용해 오디오를 **log-Mel Spectrogram**으로 변환하고, **normalization**과 **padding**을 자동 처리합니다.
 
 ```python
 from transformers import ASTFeatureExtractor
@@ -120,8 +119,7 @@ feature_extractor = ASTFeatureExtractor.from_pretrained("MIT/ast-finetuned-audio
 inputs = feature_extractor(waveform, sampling_rate=16000, return_tensors="pt")
 ```
 
-3. 이렇게 처리한 log-Mel Spectrogram은 Transformer의 input으로 사용되고,  
-   output으로는 `[CLS]` 임베딩이 추출됩니다.
+- 이렇게 처리한 log-Mel Spectrogram은 Transformer의 input으로 사용되고, output으로는 `[CLS]` 임베딩이 추출됩니다.
 
 ```python
 from transformers import ASTModel
@@ -134,7 +132,7 @@ with torch.no_grad():
     cls_embedding = outputs.last_hidden_state[:, 0, :]
 ```
 
-4. Transformer의 output 피처의 차원을 축소해 label prediction에 사용 가능하도록 준비합니다.
+- Transformer의 output 피처의 차원을 축소해 label prediction에 사용 가능하도록 준비합니다.
 
 ```python
 projector = torch.nn.Linear(768, 128)
@@ -145,10 +143,7 @@ feature = projector(cls_embedding).squeeze(0).cpu().numpy()
 
 ## **오디오 라벨 예측 (Classification)**
 
-5. 준비된 피처를 input으로 `ASTForAudioClassification`을 사용하면  
-   **오디오 라벨 예측**을 수행할 수 있습니다.  
-   불러온 사전 학습 모델에 사용된 데이터셋은 **AudioSet**으로,  
-   **527개의 클래스**가 존재하며 예측 결과는 **multi-label classification**입니다.
+- 준비된 피처를 input으로 `ASTForAudioClassification`을 사용하면 **오디오 라벨 예측**을 수행할 수 있습니다. 불러온 사전 학습 모델에 사용된 데이터셋은 **AudioSet**으로, **527개의 클래스**가 존재하며 예측 결과는 **multi-label classification**입니다.
 
 ```python
 from transformers import ASTForAudioClassification
@@ -167,6 +162,8 @@ print("Top 5 probabilities:", topk.values)
 ```
 
 이렇게 코드를 실습하면 **multi-label prediction 결과**를 확인할 수 있습니다.
+
+---
 
 이는 오디오 피처가 **어떤 의미적 정보를 담고 있는지 해석**하는 데 유용하며,  
 현재 진행 중인 연구 맥락에서 이 예측 라벨은  
