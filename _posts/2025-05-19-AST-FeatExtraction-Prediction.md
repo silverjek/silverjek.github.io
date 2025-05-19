@@ -31,6 +31,8 @@ math: true
 ## **Architecture**
 AST는 오디오를 spectrogram으로 변환하고, 이를 이미지처럼 취급해 처리하는 모델입니다. 핵심 구조는 다음과 같습니다.
 
+![AST Architecture](/img/250519/ast-architecture.png)
+
 1.	**Log-Mel Spectrogram** 생성
 	•	입력 waveform을 128-dimensional log-Mel spectrogram으로 변환
 	•	오디오 길이에 따라 [T, 128] 형태의 2D 시계열 이미지가 생성됨
@@ -45,3 +47,91 @@ AST는 오디오를 spectrogram으로 변환하고, 이를 이미지처럼 취�
 	•	CNN 없이 **전역적인 시퀀스 간 관계(context)**를 직접 학습
 5.	**[CLS] Token** 추출 (또는 전체 시퀀스 활용)
 	•	최종 출력 중 [CLS] 벡터를 오디오 전체의 표현으로 사용하거나 필요에 따라 patch-level 시퀀스 출력 전체를 사용할 수도 있음
+
+## **Hugging Face의 AST 모델 사용하기**
+
+**Hugging Face**에서는 **사전학습 된 AST 모델**을 제공합니다.
+관련 문서는 [**여기**](https://huggingface.co/docs/transformers/model_doc/audio-spectrogram-transformer)를 눌러 이동해주세요.
+
+모델을 불러오는 것 부터 시작하겠습니다.
+
+불러올 모델은 AudioSet 데이터셋으로 fine-tuned된 AST입니다.
+이 모델은 **모델 라벨 분류**를 위해 학습되었으나, Transformer의 아웃풋 **[CLS] 임베딩**을 &&오디오 피처**로 활용 가능합니다.
+
+```python
+pretrained_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
+```
+
+모델을 불러와 사용할 주요 라이브러리는 다음과 같습니다.
+```python
+from transformers import ASTFeatureExtractor, ASTModel
+```
+
+- **ASTFeatureExtractor**: raw waveform → log-mel spectrogram + normalization + padding
+  이 라이브러리는 오디오의 raw waveform을 log-mel spectrogram으로 변환 및 정규화와 패딩 처리를 합니다. 이 과정을 통해 ASTModel의 input을 준비하게 됩니다.
+- **ASTModel**: ASTFeatureExtractor로 처리된 오디오 피처를 input으로 해 Transformer로 임베딩을 추출합니다.
+
+본격적으로 위의 모델과 라이브러리를 활용해 오디오 피처를 추출 및 오디오 라벨을 예측하는 과정을 설명드리겠습니다.
+
+1. 먼저, **오디오 파일**(.wav)을 **mono 채널**로 불러와 **16kHz**로 **샘플링** 합니다.
+```python
+import soundfile as sf
+waveform, sr = sf.read(path, dtype='float32', always_2d=True)
+waveform = torch.from_numpy(waveform[:, 0])  # mono 채널 사용
+```
+
+2. 다음으로 Hugging Face의 **ASTFeatureExtractor**를 사용해 오디오를 **log-Mel Spectrogram**으로 변환하고, **normalization**과 **padding**을 자동 처리 합니다.
+
+```python
+from transformers import ASTFeatureExtractor
+
+feature_extractor = ASTFeatureExtractor.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
+
+inputs = feature_extractor(waveform, sampling_rate=16000, return_tensors="pt")
+```
+
+3. 이렇게 처리한 log-Mel Spectrogram은 Transformer의 input으로 사용되고, output으로는 [CLS] 임베딩이 추출됩니다.
+
+```python
+from transformers import ASTModel
+
+model = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
+model.eval()
+
+with torch.no_grad():
+    outputs = model(**inputs)
+    cls_embedding = outputs.last_hidden_state[:, 0, :]
+```
+
+4. Transformer의 output 피처의 차원을 축소해 label prediction에 사용 가능하도록 준비합니다.
+
+```python
+projector = torch.nn.Linear(768, 128)
+feature = projector(cls_embedding).squeeze(0).cpu().numpy()
+```
+
+5. 준비된 피처를 input으로 AST를 기반으로 하는 ASTForAudioClassification을 사용하면 오디오 라벨 예측을 수행할 수 있습니다.
+   불러온 사전 학습 모델에 사용된 데이터셋은 AudioSet으로, 527개의 클래스가 존재합니다. 예측은 이 클래스를 따르는 multi-label classification 결과입니다.
+```python
+from transformers import ASTForAudioClassification
+
+clf_model = ASTForAudioClassification.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
+clf_model.eval()
+
+with torch.no_grad():
+    outputs = clf_model(**inputs)
+    logits = outputs.logits
+    probs = torch.sigmoid(logits) 
+
+topk = torch.topk(probs, k=5)
+print("Top 5 label indices:", topk.indices)
+print("Top 5 probabilities:", topk.values)
+```
+
+이렇게 코드를 실습하면 multi-label prediction 결과를 확인할 수 있습니다.
+
+이는 오디오 피처가 어떤 의미적 정보를 담고 있는지 해석하는 데에 유용합니다.
+
+현재 진행 중인 연구 맥락에서 이 예측 라벨은 오디오 생성, 비디오-오디오 정합성 평가, 의미 기반 분류기 학습 당 다양한 downstream task에 활용될 수 있습니다.
+
+감사합니다 :)
